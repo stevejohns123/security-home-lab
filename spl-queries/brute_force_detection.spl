@@ -1,0 +1,68 @@
+/*
+=================================================================
+Detection: Brute-Force Authentication Attempts
+MITRE ATT&CK Mapping: T1110 (Brute Force) / T1110.001 / T1110.003
+Author: Steven Johnson
+=================================================================
+
+PURPOSE
+-------
+Identify source IPs generating an abnormal volume of failed
+authentication events in a short time window — a strong indicator
+of automated password-guessing or password-spraying activity.
+
+LOGIC
+-----
+1. Filter to authentication events where the outcome is "failure"
+2. Bucket events into 5-minute windows
+3. Count failures per source IP within each window
+4. Flag any source IP crossing a threshold of 5+ failures
+5. Enrich with distinct usernames targeted (helps distinguish
+   password guessing vs. password spraying)
+*/
+
+index=auth_logs sourcetype=auth_events action=failure
+| bucket _time span=5m
+| stats
+    count as failure_count,
+    dc(user) as distinct_users_targeted,
+    values(user) as targeted_usernames,
+    earliest(_time) as first_attempt,
+    latest(_time) as last_attempt
+    by _time, src_ip
+| where failure_count >= 5
+| eval attack_pattern = case(
+    distinct_users_targeted = 1, "Password Guessing (T1110.001)",
+    distinct_users_targeted > 1, "Password Spraying (T1110.003)"
+  )
+| eval first_attempt = strftime(first_attempt, "%Y-%m-%d %H:%M:%S")
+| eval last_attempt = strftime(last_attempt, "%Y-%m-%d %H:%M:%S")
+| table _time, src_ip, failure_count, distinct_users_targeted,
+        attack_pattern, targeted_usernames, first_attempt, last_attempt
+| sort - failure_count
+
+
+/*
+=================================================================
+Supporting Query: Attack Frequency Dashboard Panel
+=================================================================
+Feeds the "Attack Frequency Over Time" dashboard panel —
+hourly count of failed auth events, used to visually spot spikes.
+*/
+
+index=auth_logs sourcetype=auth_events action=failure
+| timechart span=1h count as failed_attempts
+
+
+/*
+=================================================================
+Supporting Query: Top Source IPs Dashboard Panel
+=================================================================
+Feeds the "Top Source IPs" dashboard panel — ranks attacking
+IPs by total failure volume over the selected time range.
+*/
+
+index=auth_logs sourcetype=auth_events action=failure
+| stats count as total_failures by src_ip
+| sort - total_failures
+| head 10
