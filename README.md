@@ -66,17 +66,27 @@ See the full annotated query: [`spl-queries/brute_force_detection.spl`](spl-quer
 
 Full mapping writeup: [`docs/mitre-attack-mapping.md`](docs/mitre-attack-mapping.md)
 
+### Results
+
+Running the detection query against the lab's ingested auth logs correctly surfaced both attack patterns present in the data:
+
+![Brute-force detection results](screenshots/brute-force-detection-results.png)
+
+- `203.0.113.45` flagged as **Password Guessing (T1110.001)** — 19 failed attempts against a single account (`admin`) in under 10 minutes
+- `198.51.100.77` flagged as **Password Spraying (T1110.003)** — failed attempts spread across 7 distinct accounts, consistent with an attacker trying to avoid per-account lockout thresholds
+
 ---
 
 ## Dashboards
 
-Three dashboards were built to support analyst triage:
+A two-panel dashboard was built to support analyst triage:
 
-1. **Attack Frequency Over Time** — line chart of failed-auth events per hour, used to spot spikes indicating active attacks
+1. **Attack Frequency Over Time** — hourly count of failed-auth events, used to spot spikes indicating active attacks
 2. **Top Source IPs** — ranks source IPs by failed-auth volume, used to identify likely attacker infrastructure
-3. **Authentication Failure Heatmap** — visualizes failure concentration by hour/day, used to spot attack timing patterns
 
-> 📸 *Screenshots pending — lab environment is being rebuilt. See [`screenshots/`](screenshots/) for the current gallery, updated as the lab comes back online.*
+![SOC Home Lab dashboard](screenshots/soc-dashboard-full.png)
+
+Both attacker IPs are immediately visible against normal background authentication traffic — the attack frequency panel shows two clear spikes (a brute-force burst around 10 AM, a password-spraying burst around 2 PM), and the top-source-IPs panel ranks both malicious IPs well above any legitimate internal host.
 
 ---
 
